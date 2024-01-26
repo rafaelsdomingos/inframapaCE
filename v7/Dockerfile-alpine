@@ -1,0 +1,112 @@
+FROM php:8.2.12-fpm-alpine3.18
+
+ARG COMPOSER_VERSION="2.6.5"
+ARG COMPOSER_SUM="9a18e1a3aadbcb94c1bafd6c4a98ff931f4b43a456ef48575130466e19f05dd6"
+ARG NODE_PACKAGE_URL="https://unofficial-builds.nodejs.org/download/release/v18.16.0/node-v18.16.0-linux-x64-musl.tar.gz"
+
+ENV PATH=$PATH:/opt/nodejs/bin/
+ENV COMPOSER_ALLOW_SUPERUSER=1 
+
+# Copy source
+COPY composer.json /var/www/composer.json
+COPY composer.lock /var/www/composer.lock
+COPY config /var/www/config
+COPY public /var/www/html
+COPY scripts /var/www/scripts
+COPY src /var/www/src
+COPY plugins /var/www/src/plugins
+COPY var /var/www/var
+COPY common/config.d /var/www/config/common.d
+COPY docker/recreate-pending-pcache-cron.sh /recreate-pending-pcache-cron.sh
+COPY docker/jobs-cron.sh /jobs-cron.sh
+COPY docker/entrypoint.sh /entrypoint.sh
+COPY version.txt /var/www/version.txt
+
+# Dependências
+RUN set -eux && apk update && apk add --no-cache \
+        bash \
+        imagemagick \
+        libpng \
+        libzip \
+        make \
+        zstd-libs \
+        postgresql \
+    # Dependências de desenvolvimento
+    && set -eux && apk add --no-cache --virtual .build-deps \
+        autoconf \
+        g++ \
+        gcc \
+        imagemagick-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        libxml2-dev \
+        postgresql-dev \
+        libzip-dev \
+        zlib-dev \
+        zstd-dev \
+    # Extenções PHP
+    # Install gd
+    && ln -s /usr/lib/$(apk --print-arch)-linux-gnu/libXpm.* /usr/lib/ \
+    && docker-php-ext-configure gd \
+        --enable-gd \
+        --with-jpeg \
+        --enable-gd-jis-conv \
+    && docker-php-ext-install -j$(nproc) gd && true \
+	# Install imagick
+    && pecl install imagick && docker-php-ext-enable imagick && true  \
+	# Install opcache
+    && docker-php-ext-install -j$(nproc) opcache && true \
+    # Install pgsql
+    && docker-php-ext-install -j$(nproc) pgsql && true \
+	# Install pdo_pgsql
+    && docker-php-ext-install -j$(nproc) pdo_pgsql && true \
+	# Install zip
+    && docker-php-ext-configure zip --with-zip \
+    && docker-php-ext-install -j$(nproc) zip && true \
+    # Install redis
+    && pecl install redis && docker-php-ext-enable redis && true \
+    # Install igbinary
+    && pecl install igbinary && docker-php-ext-enable igbinary && true  \
+    # Install msgpack
+    && pecl install msgpack && docker-php-ext-enable msgpack && true  \
+    # Install apcu
+    && pecl install apcu && docker-php-ext-enable apcu && true \
+    # Install iconv extension
+    && apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing gnu-libiconv \
+    # Install Composer
+    && set -eux \
+    && curl -LO "https://getcomposer.org/download/${COMPOSER_VERSION}/composer.phar" \
+    && echo "${COMPOSER_SUM}  composer.phar" | sha256sum -c - \
+    && chmod +x composer.phar \
+    && mv composer.phar /usr/local/bin/composer \
+    && composer --version \
+    && true \
+    #Instalação do Node
+    && apk add --no-cache libstdc++ \
+    && cd /opt && wget $NODE_PACKAGE_URL \
+    && mkdir -p /opt/nodejs && tar -zxvf *.tar.gz --directory /opt/nodejs --strip-components=1 \
+    && rm *.tar.gz &&  ln -s /opt/nodejs/bin/node /usr/local/bin/node \
+    && ln -s /opt/nodejs/bin/npm /usr/local/bin/npm \
+    # Instalação das extenções Node
+    && npm install -g pnpm terser uglifycss autoprefixer postcss sass \
+    #Execução do composer
+	&& cd /var/www && composer install \
+	# Instalação dos pacotes node
+	&& cd /var/www/src && pnpm install --recursive && pnpm run build \
+	&& sass themes/BaseV1/assets/css/sass/main.scss:themes/BaseV1/assets/css/main.css \
+	# alteração das permissões 
+	&& ln -s /var/www/html /var/www/public \
+	&& chown www-data:www-data -R /var/www \
+    # Clean up build packages
+    && docker-php-source delete \
+    && apk del .build-deps \
+    && true
+
+ENV LD_PRELOAD /usr/lib/preloadable_libiconv.so php    
+
+
+WORKDIR /var/www
+
+#ENTRYPOINT ["/entrypoint.sh"]
+
+EXPOSE 9000
