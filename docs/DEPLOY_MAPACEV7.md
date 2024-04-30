@@ -3,7 +3,6 @@
 ## Deploy via docker compose
 
 ```
-version: '3.2'
 services:
   nginx:
     image: secultceara/nginx:latest

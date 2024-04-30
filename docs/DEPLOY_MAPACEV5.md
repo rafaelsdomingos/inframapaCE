@@ -1,9 +1,28 @@
-# Deploy Mapa Cultural do Ceará V5
+## Deploy Mapa Cultural do Ceará V5
 
-## Deploy via docker compose
+#### Requisitos de hardware
+
+...
+
+#### Requisitos de software
+
+...
+
+Para fazer a instalação da versão mais atual do docker execute o comando:
 
 ```
-version: '3.2'
+curl -fsSL https://get.docker.com | bash
+```
+
+#### Deploy via docker compose
+
+Crie o arquivo compose.yaml
+
+```
+
+```
+
+```
 services:
   nginx:
     image: secultceara/nginx:latest
