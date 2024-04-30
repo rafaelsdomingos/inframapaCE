@@ -1,5 +1,3 @@
-# Infraestrutura Mapa Cultural do Ceará
-
 ![Logo Mapa Cultural do Ceará](imagens/logo-mapace.png)
 
 ## O que é Mapa Cultural?
